@@ -1,0 +1,1225 @@
+this is my folder structure
+ lib lib/core lib/core/services lib/core/services/service_locator.dart lib/core/services/shared_preferences_service.dart lib/core/theme lib/core/theme/theme.dart lib/core/widgets lib/core/widgets/custom_button.dart lib/core/widgets/custom_text_field.dart lib/core/widgets/image_widget.dart lib/core/widgets/social_login_button.dart lib/core/widgets/task_item.dart lib/data lib/domain lib/domain/entities lib/domain/entities/task.dart lib/domain/entities/task.g.dart lib/domain/entities/user.dart lib/domain/repositories lib/domain/repositories/auth_repository.dart lib/domain/repositories/task_repository.dart lib/domain/usecases lib/domain/usecases/auth lib/domain/usecases/auth/login.dart lib/domain/usecases/auth/logout.dart lib/domain/usecases/auth/register.dart lib/domain/usecases/task lib/domain/usecases/task/add_task.dart lib/domain/usecases/task/delete_task.dart lib/domain/usecases/task/get_tasks.dart lib/domain/usecases/task/update_task.dart lib/presentation lib/presentation/bloc lib/presentation/bloc/auth lib/presentation/bloc/auth/auth_bloc.dart lib/presentation/bloc/auth/auth_event.dart lib/presentation/bloc/auth/auth_state.dart lib/presentation/bloc/task lib/presentation/bloc/task/task_bloc.dart lib/presentation/bloc/task/task_event.dart lib/presentation/bloc/task/task_state.dart lib/presentation/controllers lib/presentation/controllers/auth_controller.dart lib/presentation/controllers/task_controller.dart lib/presentation/pages lib/presentation/pages/add_edit_task_page.dart lib/presentation/pages/home_page.dart lib/presentation/pages/login_page.dart lib/presentation/pages/onboarding_screen.dart lib/presentation/pages/register_page.dart lib/firebase_options.dart lib/main.dart 
+ lib/data/datasources lib/data/datasources/firebase_auth_datasource.dart lib/data/datasources/firestore_task_datasource.dart lib/data/repositories lib/data/repositories/auth_repository_impl.dart lib/data/repositories/task_repository_impl.dart
+
+
+
+import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:taskmanager/core/services/service_locator.dart';
+import 'package:taskmanager/firebase_options.dart';
+import 'package:taskmanager/presentation/bloc/auth/auth_event.dart';
+import 'package:taskmanager/presentation/bloc/auth/auth_state.dart';
+import 'package:taskmanager/presentation/bloc/task/task_event.dart';
+import 'package:taskmanager/presentation/pages/home_page.dart';
+import 'package:taskmanager/presentation/pages/onboarding_screen.dart';
+import 'package:taskmanager/presentation/bloc/auth/auth_bloc.dart';
+import 'package:taskmanager/presentation/bloc/task/task_bloc.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  await Hive.initFlutter(); // Initialize Hive
+  Box taskBox = await Hive.openBox('tasks'); // Open the tasks box
+
+  await init(); // Initialize Service Locator
+
+  bool isLoggedIn = await checkLoginStatus();
+
+  runApp(MyApp(isLoggedIn: isLoggedIn, taskBox: taskBox));
+}
+
+Future<bool> checkLoginStatus() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool('isLoggedIn') ?? false;
+}
+
+class MyApp extends StatelessWidget {
+  final bool isLoggedIn;
+  final Box taskBox;
+
+  const MyApp({Key? key, required this.isLoggedIn, required this.taskBox})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) => AuthBloc()
+        ..add(AuthCheckStatusEvent()), // Dispatch the check status event
+      child: BlocBuilder<AuthBloc, AuthState>(
+        builder: (context, state) {
+          if (state is AuthStatusChecked) {
+            return MultiBlocProvider(
+              providers: [
+                BlocProvider<TaskBloc>(
+                  create: (context) => TaskBloc()..add(FetchTasksEvent()),
+                ),
+              ],
+              child: MaterialApp(
+                debugShowCheckedModeBanner: false,
+                title: 'Task Management App',
+                home: state.isLoggedIn
+                    ? HomePage(taskBox: taskBox)
+                    : OnboardingPage(),
+              ),
+            );
+          }
+          // Show a loading indicator while checking auth status
+          return MaterialApp(
+            home: Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+import 'dart:ui';
+
+import 'package:flutter/material.dart';
+import 'package:taskmanager/core/widgets/image_widget.dart';
+
+import 'package:taskmanager/presentation/pages/login_page.dart';
+
+class OnboardingPage extends StatelessWidget {
+  const OnboardingPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Stack(
+        children: [
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ImageWidget(),
+              const SizedBox(height: 30),
+              const Padding(
+                padding: EdgeInsets.only(left: 40),
+                child: Text(
+                  "Get things done.",
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Padding(
+                padding: EdgeInsets.only(left: 40, right: 100),
+                child: Text(
+                  "Just a click away from planning your tasks.",
+                  textAlign: TextAlign.left,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Padding(
+                padding: EdgeInsets.only(left: 40),
+                child: Row(
+                  children: [
+                    Icon(Icons.circle, size: 10, color: Colors.grey),
+                    SizedBox(width: 6),
+                    Icon(Icons.circle, size: 10, color: Colors.grey),
+                    SizedBox(width: 6),
+                    Icon(Icons.circle,
+                        size: 10, color: Color.fromARGB(255, 51, 44, 187)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 80),
+            ],
+          ),
+          Align(
+            alignment: Alignment.bottomRight,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    height: 180,
+                    width: 180,
+                    decoration: const BoxDecoration(
+                      color: Color.fromARGB(255, 71, 63, 229),
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(180),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 10,
+                          spreadRadius: 1,
+                          offset: Offset(2, 2),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 20,
+                  right: 20,
+                  child: Container(
+                    width: 100,
+                    height: 100,
+                    decoration: const BoxDecoration(
+                      color: Color.fromARGB(255, 71, 63, 229),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => LoginPage()),
+                        ),
+                        child: const Icon(
+                          Icons.arrow_forward,
+                          color: Colors.white,
+                          size: 60,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:hive/hive.dart';
+import 'package:taskmanager/core/widgets/image_widget.dart';
+import 'package:taskmanager/presentation/bloc/auth/auth_bloc.dart';
+import 'package:taskmanager/presentation/bloc/auth/auth_event.dart';
+import 'package:taskmanager/presentation/bloc/auth/auth_state.dart';
+import 'package:taskmanager/presentation/pages/home_page.dart';
+import 'package:taskmanager/presentation/pages/register_page.dart';
+
+class LoginPage extends StatelessWidget {
+  LoginPage({super.key});
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) => AuthBloc(),
+      child: Scaffold(
+        body: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              ImageWidget(),
+              const SizedBox(height: 20),
+              const Text(
+                "Welcome back!",
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: emailController,
+                decoration: InputDecoration(
+                  labelText: "Email Address",
+                  prefixIcon: const Icon(Icons.email),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: "Password",
+                  prefixIcon: const Icon(Icons.lock),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {},
+                  child: const Text(
+                    "Forgot Password?",
+                    style: TextStyle(
+                      color: Color(0xff57018a),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: BlocConsumer<AuthBloc, AuthState>(
+                  listener: (context, state) async {
+                    if (state is AuthAuthenticated) {
+                      Box taskBox = await Hive.openBox('tasks');
+                      Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => HomePage(
+                                    taskBox: taskBox,
+                                  )));
+                    } else if (state is AuthError) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(state.message)),
+                      );
+                    }
+                  },
+                  builder: (context, state) {
+                    if (state is AuthLoading) {
+                      return Center(child: CircularProgressIndicator());
+                    }
+                    return ElevatedButton(
+                      onPressed: () {
+                        context.read<AuthBloc>().add(AuthLoginEvent(
+                            email: emailController.text.trim(),
+                            password: passwordController.text.trim()));
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.deepPurple,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text(
+                        "Log in",
+                        style: TextStyle(fontSize: 16, color: Colors.white),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text("or log in with"),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    icon: Image.asset('icons/facebook-13.png'),
+                    iconSize: 40,
+                    onPressed: () {},
+                  ),
+                  const SizedBox(width: 20),
+                  IconButton(
+                    icon: Image.asset('icons/google-37.png'),
+                    iconSize: 40,
+                    onPressed: () {},
+                  ),
+                  const SizedBox(width: 20),
+                  IconButton(
+                    icon: Image.asset('icons/apple-4.png'),
+                    iconSize: 40,
+                    onPressed: () {},
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => RegisterPage()),
+                ),
+                child: const Text.rich(
+                  TextSpan(
+                    text: "Don't have an account? ",
+                    style: TextStyle(color: Colors.black),
+                    children: [
+                      TextSpan(
+                        text: "Get started!",
+                        style: TextStyle(
+                          color: Color(0xFF6C63FF),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:taskmanager/presentation/bloc/auth/auth_bloc.dart';
+import 'package:taskmanager/presentation/bloc/auth/auth_event.dart';
+import 'package:taskmanager/presentation/bloc/auth/auth_state.dart';
+import 'package:taskmanager/presentation/pages/login_page.dart';
+import 'package:taskmanager/presentation/pages/home_page.dart';
+import 'package:taskmanager/core/widgets/social_login_button.dart';
+import 'package:taskmanager/core/services/service_locator.dart';
+
+class RegisterPage extends StatelessWidget {
+  RegisterPage({super.key});
+
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: BlocListener<AuthBloc, AuthState>(
+          listener: (context, state) {
+            if (state is AuthAuthenticated) {
+              // Navigate to home page when authentication is successful
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => HomePage(
+                      taskBox: sl()), // Replace with your taskBox if needed
+                ),
+              );
+            } else if (state is AuthError) {
+              // Show error when authentication fails
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(state.message)),
+              );
+            }
+          },
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Image.asset(
+                'assets/images/app_icon.png', // Adjust to match the design
+                width: 80,
+                height: 80,
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                "Let's get started!",
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: emailController,
+                decoration: const InputDecoration(
+                  labelText: "Email Address",
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: "Password",
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    // Dispatch register event to BLoC
+                    context.read<AuthBloc>().add(
+                          AuthRegisterEvent(
+                            email: emailController.text,
+                            password: passwordController.text,
+                          ),
+                        );
+                  },
+                  child: const Text("Sign up"),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text("or sign up with"),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SocialLoginButton(
+                    iconPath: 'assets/icons/facebook.png',
+                    onPressed: () {}, // Add social login logic
+                  ),
+                  const SizedBox(width: 20),
+                  SocialLoginButton(
+                    iconPath: 'assets/icons/google.png',
+                    onPressed: () {}, // Add social login logic
+                  ),
+                  const SizedBox(width: 20),
+                  SocialLoginButton(
+                    iconPath: 'assets/icons/apple.png',
+                    onPressed: () {}, // Add social login logic
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              GestureDetector(
+                onTap: () => Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => LoginPage()),
+                ),
+                child: const Text.rich(
+                  TextSpan(
+                    text: "Already have an account? ",
+                    style: TextStyle(color: Colors.grey),
+                    children: [
+                      TextSpan(
+                        text: "Log in",
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, color: Colors.blue),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:hive/hive.dart';
+import 'package:taskmanager/presentation/bloc/task/task_bloc.dart';
+import 'package:taskmanager/presentation/bloc/task/task_event.dart';
+import 'package:taskmanager/presentation/bloc/task/task_state.dart';
+import 'package:taskmanager/presentation/pages/add_edit_task_page.dart';
+
+class HomePage extends StatelessWidget {
+  final Box taskBox;
+
+  HomePage({Key? key, required this.taskBox}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Color(0xFF6C63FF),
+        title: Text("My tasks",
+            style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.search, color: Colors.white),
+            onPressed: () {},
+          ),
+        ],
+        elevation: 0,
+      ),
+      body: BlocProvider<TaskBloc>(
+        create: (context) => TaskBloc()..add(FetchTasksEvent()),
+        child: Column(
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: Color(0xFF6C63FF),
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(20),
+                  bottomRight: Radius.circular(20),
+                ),
+              ),
+              padding: EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      decoration: InputDecoration(
+                        hintText: "Search tasks...",
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                        prefixIcon: Icon(Icons.search, color: Colors.grey),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: BlocBuilder<TaskBloc, TaskState>(
+                builder: (context, state) {
+                  if (state is TaskLoading) {
+                    return Center(child: CircularProgressIndicator());
+                  } else if (state is TaskError) {
+                    return Center(
+                      child: Text(state.message,
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w500)),
+                    );
+                  } else if (state is TaskLoaded) {
+                    final tasks = state.tasks;
+
+                    if (tasks.isEmpty) {
+                      return Center(
+                        child: Text("No tasks available",
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w500)),
+                      );
+                    }
+
+                    return ListView.builder(
+                      padding: EdgeInsets.all(16),
+                      itemCount: tasks.length,
+                      itemBuilder: (context, index) {
+                        final task = tasks[index];
+                        return Card(
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                          margin: EdgeInsets.symmetric(vertical: 8),
+                          elevation: 2,
+                          child: ListTile(
+                            title: Text(task.title,
+                                style: TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text(task.dueDate.toString()),
+                            trailing: IconButton(
+                              icon: Icon(Icons.delete, color: Colors.red),
+                              onPressed: () {
+                                context
+                                    .read<TaskBloc>()
+                                    .add(DeleteTaskEvent(task.id));
+                              },
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  }
+                  return SizedBox.shrink();
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AddEditTaskPage(),
+            ),
+          );
+        },
+        backgroundColor: Color(0xFF6C63FF),
+        child: Icon(Icons.add, color: Colors.white),
+      ),
+    );
+  }
+}
+
+
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:taskmanager/domain/entities/task.dart';
+import 'package:taskmanager/presentation/bloc/task/task_bloc.dart';
+import 'package:taskmanager/presentation/bloc/task/task_event.dart';
+
+// ignore: must_be_immutable
+class AddEditTaskPage extends StatelessWidget {
+  final Task? task;
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _dueDateController = TextEditingController();
+  String? _priority = 'low';
+
+  AddEditTaskPage({Key? key, this.task}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    if (task != null) {
+      _titleController.text = task!.title;
+      _descriptionController.text = task!.description;
+      _dueDateController.text = task!.dueDate.toString();
+      _priority = task!.priority;
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(task == null ? "Add Task" : "Edit Task"),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              TextFormField(
+                controller: _titleController,
+                decoration: InputDecoration(labelText: "Title"),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return "Please enter a title";
+                  }
+                  return null;
+                },
+              ),
+              TextFormField(
+                controller: _descriptionController,
+                decoration: InputDecoration(labelText: "Description"),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return "Please enter a description";
+                  }
+                  return null;
+                },
+              ),
+              TextFormField(
+                controller: _dueDateController,
+                decoration: InputDecoration(labelText: "Due Date"),
+                readOnly: true,
+                onTap: () async {
+                  final selectedDate = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime(2100),
+                  );
+                  if (selectedDate != null) {
+                    _dueDateController.text = selectedDate.toString();
+                  }
+                },
+              ),
+              DropdownButtonFormField<String>(
+                value: _priority,
+                items: ['low', 'medium', 'high']
+                    .map((priority) => DropdownMenuItem(
+                          value: priority,
+                          child: Text(priority),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  _priority = value!;
+                },
+                decoration: InputDecoration(labelText: "Priority"),
+              ),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () => _saveTask(context),
+                child: Text("Save"),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _saveTask(BuildContext context) {
+    if (_formKey.currentState!.validate()) {
+      final task = Task(
+        id: this.task?.id ?? DateTime.now().toString(),
+        title: _titleController.text,
+        description: _descriptionController.text,
+        dueDate: DateTime.parse(_dueDateController.text),
+        priority: _priority!,
+      );
+
+      if (this.task == null) {
+        // Dispatch create task event
+        BlocProvider.of<TaskBloc>(context).add(CreateTaskEvent(task));
+      } else {
+        // Dispatch edit task event
+        BlocProvider.of<TaskBloc>(context).add(EditTaskEvent(task));
+      }
+
+      Navigator.pop(context); // Go back after saving
+    }
+  }
+}
+
+
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:taskmanager/domain/entities/task.dart';
+import 'package:taskmanager/domain/usecases/task/add_task.dart';
+import 'package:taskmanager/domain/usecases/task/delete_task.dart';
+import 'package:taskmanager/domain/usecases/task/get_tasks.dart';
+import 'package:taskmanager/domain/usecases/task/update_task.dart';
+import 'package:taskmanager/presentation/bloc/task/task_event.dart';
+import 'package:taskmanager/presentation/bloc/task/task_state.dart';
+import 'package:get_it/get_it.dart';
+
+// The TaskBloc class which manages events and emits states.
+class TaskBloc extends Bloc<TaskEvent, TaskState> {
+  // Dependencies fetched via GetIt (service locator)
+  final GetTasks getTasks = GetIt.instance<GetTasks>();
+  final AddTask addTask = GetIt.instance<AddTask>();
+  final UpdateTask updateTask = GetIt.instance<UpdateTask>();
+  final DeleteTask deleteTask = GetIt.instance<DeleteTask>();
+
+  TaskBloc() : super(TaskInitial()) {
+    on<FetchTasksEvent>((event, emit) async {
+      emit(TaskLoading());
+      try {
+        final tasks = await getTasks();
+        emit(TaskLoaded(tasks)); // Emit tasks when they are fetched
+      } catch (_) {
+        emit(TaskError("Failed to load tasks"));
+      }
+    });
+
+    on<CreateTaskEvent>((event, emit) async {
+      try {
+        await addTask(event.task);
+        emit(TaskAdded());
+        add(FetchTasksEvent()); // Fetch updated tasks after adding a new one
+      } catch (_) {
+        emit(TaskError("Failed to add task"));
+      }
+    });
+
+    on<EditTaskEvent>((event, emit) async {
+      try {
+        await updateTask(event.task);
+        emit(TaskUpdated());
+        add(FetchTasksEvent()); // Fetch updated tasks after editing a task
+      } catch (_) {
+        emit(TaskError("Failed to update task"));
+      }
+    });
+
+    on<DeleteTaskEvent>((event, emit) async {
+      try {
+        await deleteTask(event.taskId);
+        emit(TaskDeleted());
+        add(FetchTasksEvent()); // Fetch updated tasks after deleting a task
+      } catch (_) {
+        emit(TaskError("Failed to delete task"));
+      }
+    });
+
+    on<SortTasksEvent>((event, emit) async {
+      if (state is TaskLoaded) {
+        List<Task> tasks = List.from((state as TaskLoaded).tasks);
+        tasks.sort(
+            (a, b) => a.dueDate.compareTo(b.dueDate)); // Sorting by due date
+        emit(TaskLoaded(tasks)); // Emit sorted tasks
+      }
+    });
+
+    on<FilterTasksEvent>((event, emit) async {
+      if (state is TaskLoaded) {
+        List<Task> tasks = List.from((state as TaskLoaded).tasks);
+        // Filter tasks based on selected criteria (e.g., priority, status)
+        final filteredTasks = tasks.where((task) {
+          final matchesPriority =
+              event.priority == 'all' || task.priority == event.priority;
+          final matchesStatus = event.status == 'all' ||
+              (event.status == 'completed' && task.isCompleted) ||
+              (event.status == 'incomplete' && !task.isCompleted);
+          return matchesPriority && matchesStatus;
+        }).toList();
+
+        emit(TaskLoaded(filteredTasks)); // Emit filtered tasks
+      }
+    });
+  }
+}
+
+
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:taskmanager/domain/usecases/auth/login.dart';
+import 'package:taskmanager/domain/usecases/auth/register.dart';
+import 'package:taskmanager/domain/usecases/auth/logout.dart';
+import 'package:taskmanager/presentation/bloc/auth/auth_event.dart';
+import 'package:taskmanager/presentation/bloc/auth/auth_state.dart';
+import 'package:get_it/get_it.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+// The AuthBloc class which manages events and emits states.
+class AuthBloc extends Bloc<AuthEvent, AuthState> {
+  // Dependencies fetched via GetIt (service locator)
+  final Login login = GetIt.instance<Login>();
+  final Register register = GetIt.instance<Register>();
+  final Logout logout = GetIt.instance<Logout>();
+
+  AuthBloc() : super(AuthInitial()) {
+    on<AuthLoginEvent>((event, emit) async {
+      emit(AuthLoading());
+      try {
+        final user = await login(event.email, event.password);
+        emit(AuthAuthenticated(user: user));
+      } catch (_) {
+        emit(AuthError("Login failed"));
+      }
+    });
+
+    on<AuthRegisterEvent>((event, emit) async {
+      emit(AuthLoading());
+      try {
+        final user = await register(event.email, event.password);
+        emit(AuthAuthenticated(user: user));
+      } catch (_) {
+        emit(AuthError("Registration failed"));
+      }
+    });
+
+    on<AuthLogoutEvent>((event, emit) async {
+      try {
+        await logout();
+        emit(AuthUnauthenticated());
+      } catch (_) {
+        emit(AuthError("Logout failed"));
+      }
+    });
+
+    on<AuthCheckStatusEvent>((event, emit) async {
+      final prefs = await SharedPreferences.getInstance();
+      bool isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+      emit(AuthStatusChecked(isLoggedIn));
+    });
+  }
+}
+
+
+import 'package:equatable/equatable.dart';
+import 'package:hive/hive.dart';
+
+part 'task.g.dart';
+
+@HiveType(typeId: 0)
+class Task extends Equatable {
+  @HiveField(0)
+  final String id;
+
+  @HiveField(1)
+  final String title;
+
+  @HiveField(2)
+  final String description;
+
+  @HiveField(3)
+  final DateTime dueDate;
+
+  @HiveField(4)
+  final String priority; // low, medium, high
+
+  @HiveField(5)
+  final bool isCompleted;
+
+  const Task({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.dueDate,
+    required this.priority,
+    this.isCompleted = false,
+  });
+
+  // Convert Task to a Map (For Firebase)
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'dueDate': dueDate.toIso8601String(),
+      'priority': priority,
+      'isCompleted': isCompleted,
+    };
+  }
+
+  // Create a Task from Firebase data
+  factory Task.fromMap(Map<String, dynamic> map) {
+    return Task(
+      id: map['id'] ?? '',
+      title: map['title'] ?? '',
+      description: map['description'] ?? '',
+      dueDate: DateTime.parse(map['dueDate']),
+      priority: map['priority'] ?? 'low',
+      isCompleted: map['isCompleted'] ?? false,
+    );
+  }
+
+  @override
+  List<Object?> get props =>
+      [id, title, description, dueDate, priority, isCompleted];
+}
+
+
+// GENERATED CODE - DO NOT MODIFY BY HAND
+
+part of 'task.dart';
+
+// **************************************************************************
+// TypeAdapterGenerator
+// **************************************************************************
+
+class TaskAdapter extends TypeAdapter<Task> {
+  @override
+  final int typeId = 0;
+
+  @override
+  Task read(BinaryReader reader) {
+    final numOfFields = reader.readByte();
+    final fields = <int, dynamic>{
+      for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
+    };
+    return Task(
+      id: fields[0] as String,
+      title: fields[1] as String,
+      description: fields[2] as String,
+      dueDate: fields[3] as DateTime,
+      priority: fields[4] as String,
+      isCompleted: fields[5] as bool,
+    );
+  }
+
+  @override
+  void write(BinaryWriter writer, Task obj) {
+    writer
+      ..writeByte(6)
+      ..writeByte(0)
+      ..write(obj.id)
+      ..writeByte(1)
+      ..write(obj.title)
+      ..writeByte(2)
+      ..write(obj.description)
+      ..writeByte(3)
+      ..write(obj.dueDate)
+      ..writeByte(4)
+      ..write(obj.priority)
+      ..writeByte(5)
+      ..write(obj.isCompleted);
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TaskAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}
+
+
+import 'package:get_it/get_it.dart';
+import 'package:taskmanager/core/services/shared_preferences_service.dart';
+import 'package:taskmanager/data/datasources/firebase_auth_datasource.dart';
+import 'package:taskmanager/data/datasources/firestore_task_datasource.dart';
+import 'package:taskmanager/data/repositories/auth_repository_impl.dart';
+import 'package:taskmanager/data/repositories/task_repository_impl.dart';
+import 'package:taskmanager/domain/repositories/auth_repository.dart';
+import 'package:taskmanager/domain/repositories/task_repository.dart';
+import 'package:taskmanager/domain/usecases/auth/login.dart';
+import 'package:taskmanager/domain/usecases/auth/logout.dart';
+import 'package:taskmanager/domain/usecases/auth/register.dart';
+import 'package:taskmanager/domain/usecases/task/add_task.dart';
+import 'package:taskmanager/domain/usecases/task/delete_task.dart';
+import 'package:taskmanager/domain/usecases/task/get_tasks.dart';
+import 'package:taskmanager/domain/usecases/task/update_task.dart';
+
+final sl = GetIt.instance;
+
+Future<void> init() async {
+  // Data Sources
+  sl.registerLazySingleton(() => FirebaseAuthDataSource());
+  sl.registerLazySingleton(() => FirestoreTaskDataSource());
+
+  // Repositories
+  sl.registerLazySingleton<AuthRepository>(() => AuthRepositoryImpl(sl()));
+  sl.registerLazySingleton<TaskRepository>(() => TaskRepositoryImpl(sl()));
+
+  // Use Cases
+  sl.registerLazySingleton(() => Login(sl()));
+  sl.registerLazySingleton(() => Logout(sl()));
+  sl.registerLazySingleton(() => Register(sl()));
+  sl.registerLazySingleton(() => AddTask(sl()));
+  sl.registerLazySingleton(() => UpdateTask(sl()));
+  sl.registerLazySingleton(() => DeleteTask(sl()));
+  sl.registerLazySingleton(() => GetTasks(sl()));
+
+  // Services
+  sl.registerLazySingleton(() => SharedPreferencesService());
+}
+
+
+import 'package:shared_preferences/shared_preferences.dart';
+
+class SharedPreferencesService {
+  static const String _isLoggedInKey = 'isLoggedIn';
+  static const String _userIdKey = 'userId';
+
+  Future<void> setLoggedIn(bool isLoggedIn) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_isLoggedInKey, isLoggedIn);
+  }
+
+  Future<bool> isLoggedIn() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_isLoggedInKey) ?? false;
+  }
+
+  Future<void> setUserId(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_userIdKey, userId);
+  }
+
+  Future<String?> getUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_userIdKey);
+  }
+
+  Future<void> clear() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+  }
+}
+
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:taskmanager/domain/entities/user.dart' as UserClass;
+
+class FirebaseAuthDataSource {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  Future<UserClass.User> login(String email, String password) async {
+    final userCredential = await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    return UserClass.User(
+      id: userCredential.user!.uid,
+      email: userCredential.user!.email!,
+    );
+  }
+
+  Future<UserClass.User> register(String email, String password) async {
+    final userCredential = await _auth.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    return UserClass.User(
+      id: userCredential.user!.uid,
+      email: userCredential.user!.email!,
+    );
+  }
+
+  Future<void> logout() async {
+    await _auth.signOut();
+  }
+}
+
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:taskmanager/domain/entities/task.dart';
+
+class FirestoreTaskDataSource {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  Future<void> addTask(Task task) async {
+    await _firestore.collection('tasks').doc(task.id).set({
+      'title': task.title,
+      'description': task.description,
+      'dueDate': task.dueDate.toIso8601String(),
+      'priority': task.priority,
+      'isCompleted': task.isCompleted,
+    });
+  }
+
+  Future<void> updateTask(Task task) async {
+    await _firestore.collection('tasks').doc(task.id).update({
+      'title': task.title,
+      'description': task.description,
+      'dueDate': task.dueDate.toIso8601String(),
+      'priority': task.priority,
+      'isCompleted': task.isCompleted,
+    });
+  }
+
+  Future<void> deleteTask(String taskId) async {
+    await _firestore.collection('tasks').doc(taskId).delete();
+  }
+
+  Future<List<Task>> getTasks() async {
+    final querySnapshot = await _firestore.collection('tasks').get();
+    return querySnapshot.docs.map((doc) {
+      return Task(
+        id: doc.id,
+        title: doc['title'],
+        description: doc['description'],
+        dueDate: DateTime.parse(doc['dueDate']),
+        priority: doc['priority'],
+        isCompleted: doc['isCompleted'],
+      );
+    }).toList();
+  }
+}
+
+
+this is my code for project and below is my requirements:
+You are required to build a simple task management app for gig workers that allows users to create, update, delete, and view tasks. The app should have basic user authentication, local data storage, and an intuitive user interface. The goal of this task is to evaluate your coding style, understanding of Flutter, and ability to implement standard features of a modern mobile application. You need to use clean architecture and bloc/riverpod for state management.
+Deadline for the submission is 6 Feb 2025
+
+Requirements:
+User Authentication:
+
+Implement user registration and login using Firebase Authentication (email/password).
+
+Display appropriate error messages for invalid credentials.
+
+Task Management:
+
+Users should be able to create, edit, delete, and view tasks.
+
+Each task should have the following fields: title, description, due date, and priority (low, medium, high).
+
+Tasks should be stored on firebase/any other backend of your choice.
+
+Include a feature to mark tasks as complete/incomplete.
+
+Task Filtering:
+
+Provide the ability to filter tasks by priority and status (completed/incomplete).
+
+Tasks should be displayed in a list format, sorted by due date (earliest to latest).
+
+User Interface:
+
+Create a clean and responsive UI with Material Design principles.
+
+Ensure the app is visually appealing on both iOS and Android devices (use appropriate padding, spacing, and colors)
+
+
+now there are still some things left such as using hive for storing task maybe defining hive instance in service locator if required and saving login status in sharedpref when user log in. do all these task, step by step guide me to complete every file and feature also how can we filter and sort task as mentioned, first define how we will do everything than step by step edit files ensure consistency.
