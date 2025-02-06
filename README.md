@@ -2,6 +2,9 @@
 
 TaskManager is a **powerful yet simple** task management app designed specifically for **gig workers**. It enables users to **seamlessly create, update, delete, and manage tasks** while providing a **smooth user experience**. Built with **Flutter**, it follows **clean architecture principles** and uses **BLoC for state management** to ensure maintainability and scalability.
 
+## 🎥 Demo Video
+[![Watch the Video](https://img.shields.io/badge/Watch%20Demo-Click%20Here-blue)](https://vimeo.com/1054179385/136ce6dfbc?share=copy)
+
 ## ✨ Features
 
 ### 🔐 User Authentication
@@ -127,3 +130,7 @@ TaskManager relies on the following **Flutter dependencies**:
 ```sh
  flutter run
 ```
+
+## 📥 Download APK
+
+[Download Latest APK](#) *(https://tinyurl.com/yc32jxzf)*
